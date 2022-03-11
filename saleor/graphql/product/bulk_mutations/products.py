@@ -20,6 +20,7 @@ from ....product import models
 from ....product.error_codes import ProductErrorCode
 from ....product.search import (
     prepare_product_search_document_value,
+    prepare_product_search_vector_value,
     update_product_search_document,
 )
 from ....product.tasks import update_product_discounted_price_task
@@ -643,9 +644,15 @@ class ProductVariantBulkDelete(ModelBulkDeleteMutation):
         )
         for product in products:
             product.search_document = prepare_product_search_document_value(product)
+            product.search_vector = prepare_product_search_vector_value(product)
             product.default_variant = product.variants.first()
             product.save(
-                update_fields=["default_variant", "search_document", "updated_at"]
+                update_fields=[
+                    "default_variant",
+                    "search_document",
+                    "search_vector",
+                    "updated_at",
+                ]
             )
 
         return response

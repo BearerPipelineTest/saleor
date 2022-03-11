@@ -394,6 +394,7 @@ class Product(SeoModel, ModelWithMetadata):
     description = SanitizedJSONField(blank=True, null=True, sanitizer=clean_editor_js)
     description_plaintext = TextField(blank=True)
     search_document = models.TextField(blank=True, default="")
+    search_vector = SearchVectorField(blank=True, null=True)
 
     category = models.ForeignKey(
         Category,
@@ -432,9 +433,12 @@ class Product(SeoModel, ModelWithMetadata):
         indexes = [
             GinIndex(
                 name="product_search_gin",
-                # `opclasses` and `fields` should be the same length
                 fields=["search_document"],
                 opclasses=["gin_trgm_ops"],
+            ),
+            GinIndex(
+                name="product_tsearch",
+                fields=["search_vector"],
             ),
         ]
         indexes.extend(ModelWithMetadata.Meta.indexes)
