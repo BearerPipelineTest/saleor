@@ -1287,6 +1287,7 @@ def test_generate_truncated_api_call_payload(app, rf):
         "response": {
             "headers": {"Content-Type": "application/json"},
             "body": {"text": '{"response": "data"}', "truncated": False},
+            "contentLength": 20,
             "statusCode": 200,
             "reasonPhrase": "OK",
         },
@@ -1354,13 +1355,17 @@ def test_generate_truncated_event_delivery_attempt_payload(event_attempt):
         "request": {"headers": {}},
         "response": {
             "headers": {},
+            "contentLength": 16,
             "body": {"text": "example_response", "truncated": False},
         },
         "eventDelivery": {
             "id": graphene.Node.to_global_id("EventDelivery", delivery.pk),
             "payload": {
-                "text": '{"payload_key": "payload_value"}',
-                "truncated": False,
+                "body": {
+                    "text": '{"payload_key": "payload_value"}',
+                    "truncated": False,
+                },
+                "contentLength": 32,
             },
             "status": EventDeliveryStatus.PENDING,
             "type": WebhookEventAsyncType.ANY,
