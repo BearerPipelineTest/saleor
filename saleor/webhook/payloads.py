@@ -1071,7 +1071,7 @@ def hide_sensitive_headers(
     }
 
 
-EMPTY_TRUNC_TEXT = JsonTruncText(truncated=False)
+TRUNC_PLACEHOLDER = JsonTruncText(truncated=False)
 
 
 def generate_truncated_api_call_payload(
@@ -1088,14 +1088,14 @@ def generate_truncated_api_call_payload(
         "time": req_time.timestamp(),
         "headers": hide_sensitive_headers(dict(request.headers)),
         "contentLength": int(request.headers.get("Content-Length", 0)),
-        "body": EMPTY_TRUNC_TEXT,
+        "body": TRUNC_PLACEHOLDER,
     }
     res_data = {
         "headers": hide_sensitive_headers(dict(response.headers)),
         "statusCode": response.status_code,
         "reasonPhrase": response.reason_phrase,
         "contentLength": len(response.content),
-        "body": EMPTY_TRUNC_TEXT,
+        "body": TRUNC_PLACEHOLDER,
     }
     app_data = None
     if app := getattr(request, "app", None):
@@ -1141,7 +1141,7 @@ def generate_truncated_event_delivery_attempt_payload(
             "type": delivery.event_type,
             "payload": {
                 "contentLength": len(payload or ""),
-                "body": EMPTY_TRUNC_TEXT,
+                "body": TRUNC_PLACEHOLDER,
             },
         }
         if webhook := delivery.webhook:
@@ -1155,11 +1155,8 @@ def generate_truncated_event_delivery_attempt_payload(
                 "targetUrl": webhook.target_url,
             }
     response_body = attempt.response or ""
-    request_headers, response_headers = {}, {}
-    if isinstance(attempt.request_headers, str):
-        request_headers = json.loads(attempt.request_headers)
-    if isinstance(attempt.response_headers, str):
-        response_headers = json.loads(attempt.response_headers)
+    request_headers = json.loads(attempt.request_headers or "{}")
+    response_headers = json.loads(attempt.response_headers or "{}")
     data = {
         "eventDeliveryAttempt": {
             "id": graphene.Node.to_global_id("EventDeliveryAttempt", attempt.pk),
@@ -1174,7 +1171,7 @@ def generate_truncated_event_delivery_attempt_payload(
         "response": {
             "headers": response_headers,
             "contentLength": len(response_body.encode("utf-8")),
-            "body": EMPTY_TRUNC_TEXT,
+            "body": TRUNC_PLACEHOLDER,
         },
         "eventDelivery": delivery_data,
         "webhook": webhook_data,
