@@ -1271,7 +1271,7 @@ def test_generate_truncated_api_call_payload(app, rf):
     request.app = app
     response = JsonResponse({"response": "data"})
 
-    payload = generate_truncated_api_call_payload(request, response)
+    payload = json.loads(generate_truncated_api_call_payload(request, response))
 
     assert payload == {
         "request": {
@@ -1316,7 +1316,7 @@ def test_generate_truncated_api_call_payload_from_post_request(app, rf):
     request.app = app
     response = JsonResponse({"response": "data"})
 
-    payload = generate_truncated_api_call_payload(request, response)
+    payload = json.loads(generate_truncated_api_call_payload(request, response))
 
     assert payload["request"]["body"] == {
         "text": "request=data&choices=a&choices=b&choices=d",
@@ -1332,7 +1332,7 @@ def test_generate_truncated_api_call_payload_not_from_app_payload(rf):
     request.app = None
     response = JsonResponse({"response": "data"})
 
-    payload = generate_truncated_api_call_payload(request, response)
+    payload = json.loads(generate_truncated_api_call_payload(request, response))
 
     assert payload["app"] is None
 
@@ -1342,7 +1342,9 @@ def test_generate_truncated_event_delivery_attempt_payload(event_attempt):
     webhook = delivery.webhook
     app = webhook.app
 
-    payload = generate_truncated_event_delivery_attempt_payload(event_attempt, None)
+    payload = json.loads(
+        generate_truncated_event_delivery_attempt_payload(event_attempt, None)
+    )
 
     assert payload == {
         "eventDeliveryAttempt": {
@@ -1386,7 +1388,9 @@ def test_generate_truncated_event_delivery_attempt_payload_with_next_retry_date(
     event_attempt,
 ):
     next_retry_date = datetime(1914, 6, 28, 10, 50, tzinfo=timezone.utc)
-    payload = generate_truncated_event_delivery_attempt_payload(
-        event_attempt, next_retry=next_retry_date
+    payload = json.loads(
+        generate_truncated_event_delivery_attempt_payload(
+            event_attempt, next_retry=next_retry_date
+        )
     )
     assert payload["eventDeliveryAttempt"]["nextRetry"] == next_retry_date.timestamp()
