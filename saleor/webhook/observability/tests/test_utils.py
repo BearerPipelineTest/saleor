@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 
 import pytest
@@ -5,7 +6,12 @@ import pytz
 from celery.exceptions import Retry
 from freezegun import freeze_time
 
-from ..utils import JsonTruncText, hide_sensitive_headers, task_next_retry_date
+from ..utils import (
+    CustomJsonEncoder,
+    JsonTruncText,
+    hide_sensitive_headers,
+    task_next_retry_date,
+)
 
 
 @pytest.mark.parametrize(
@@ -89,3 +95,16 @@ def test_task_next_retry_date(retry, next_retry_date):
 )
 def test_hide_sensitive_headers(headers, sensitive, expected):
     assert hide_sensitive_headers(headers, sensitive_headers=sensitive) == expected
+
+
+def test_custom_json_encoder_dumps_json_trunc_text():
+    # given
+    input = {"body": JsonTruncText("content", truncated=True)}
+
+    # wehen
+    serialized_data = json.dumps(input, cls=CustomJsonEncoder)
+
+    # then
+    data = json.loads(serialized_data)
+    assert data["body"]["text"] == "content"
+    assert data["body"]["truncated"] is True

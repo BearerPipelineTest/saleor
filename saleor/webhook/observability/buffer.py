@@ -26,7 +26,6 @@ from .payloads import (
 from .utils import _get_webhooks_for_event
 
 if TYPE_CHECKING:
-    from celery.exceptions import Retry
 
     from ...core.models import EventDeliveryAttempt
 

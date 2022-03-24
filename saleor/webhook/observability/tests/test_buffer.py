@@ -8,7 +8,7 @@ from kombu.exceptions import ChannelError
 from kombu.exceptions import ConnectionError as KombuConnectionError
 from kombu.exceptions import KombuError
 
-from ....webhook.event_types import WebhookEventAsyncType, WebhookEventSyncType
+from ....webhook.event_types import WebhookEventAsyncType
 from ..buffer import (
     CACHE_KEY,
     FullObservabilityEventsBuffer,
@@ -20,7 +20,6 @@ from ..buffer import (
     observability_buffer_put_event,
     observability_buffer_size_in_batches,
     observability_connection,
-    observability_event_delivery_attempt,
 )
 
 # from ..tasks import observability_reporter_task, observability_send_events

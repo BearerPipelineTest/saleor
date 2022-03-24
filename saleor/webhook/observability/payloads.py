@@ -26,7 +26,7 @@ class RequestPayload(TypedDict):
     id: str
     method: str
     url: str
-    time: datetime
+    time: float
     headers: Dict[str, str]
     contentLength: int
 

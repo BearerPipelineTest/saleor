@@ -2,7 +2,7 @@ import json
 import uuid
 from collections import defaultdict
 from dataclasses import asdict
-from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional
 
 import graphene
 from django.contrib.auth.models import AnonymousUser
@@ -13,13 +13,14 @@ from .. import __version__
 from ..account.models import User
 from ..attribute.models import AttributeValueTranslation
 from ..checkout.models import Checkout
-from ..core.auth import DEFAULT_AUTH_HEADER, SALEOR_AUTH_HEADER
 from ..core.prices import quantize_price, quantize_price_fields
 from ..core.utils import build_absolute_uri
-from ..core.utils.anonymization import (anonymize_checkout, anonymize_order,
-                                        generate_fake_user)
+from ..core.utils.anonymization import (
+    anonymize_checkout,
+    anonymize_order,
+    generate_fake_user,
+)
 from ..core.utils.json_serializer import CustomJsonEncoder
-from ..core.utils.json_truncate import JsonTruncText
 from ..discount.utils import fetch_active_discounts
 from ..order import FulfillmentStatus, OrderStatus
 from ..order.models import Fulfillment, FulfillmentLine, Order, OrderLine
@@ -34,8 +35,10 @@ from ..warehouse.models import Stock, Warehouse
 from . import traced_payload_generator
 from .event_types import WebhookEventAsyncType
 from .payload_serializers import PayloadSerializer
-from .serializers import (serialize_checkout_lines,
-                          serialize_product_or_variant_attributes)
+from .serializers import (
+    serialize_checkout_lines,
+    serialize_product_or_variant_attributes,
+)
 
 if TYPE_CHECKING:
     # pylint: disable=unused-import
@@ -43,11 +46,6 @@ if TYPE_CHECKING:
 
 
 if TYPE_CHECKING:
-    from datetime import datetime
-
-    from django.http import HttpRequest, JsonResponse
-
-    from ..core.models import EventDeliveryAttempt
     from ..discount.models import Sale
     from ..graphql.discount.mutations import NodeCatalogueInfo
     from ..invoice.models import Invoice

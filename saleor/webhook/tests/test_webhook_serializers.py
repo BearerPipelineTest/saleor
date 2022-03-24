@@ -2,13 +2,13 @@ from operator import itemgetter
 from unittest.mock import ANY
 
 import graphene
+import pytest
 
 from ...attribute.models import AttributeValue
 from ...attribute.utils import associate_attribute_values_to_instance
 from ...checkout.fetch import fetch_checkout_lines
 from ...core.prices import quantize_price
 from ..serializers import (
-    JsonTruncText,
     serialize_checkout_lines,
     serialize_product_or_variant_attributes,
 )

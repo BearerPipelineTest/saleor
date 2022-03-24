@@ -4,7 +4,6 @@ from decimal import Decimal
 from unittest import mock
 from unittest.mock import ANY, MagicMock
 from urllib.parse import urlencode
-from uuid import uuid4
 
 import boto3
 import graphene
@@ -13,7 +12,6 @@ from celery.exceptions import MaxRetriesExceededError
 from celery.exceptions import Retry as CeleryTaskRetryError
 from django.contrib.auth.tokens import default_token_generator
 from django.core.serializers import serialize
-from django.http import JsonResponse
 from django.utils import timezone
 from freezegun import freeze_time
 from kombu.asynchronous.aws.sqs.connection import AsyncSQSConnection
@@ -936,109 +934,6 @@ def test_event_delivery_retry(mocked_webhook_send, event_delivery, settings):
 
     # then
     mocked_webhook_send.assert_called_once_with(event_delivery.pk)
-
-
-# @pytest.fixture
-# def setup_webhooks_plugin(settings, app, any_webhook, permission_manage_apps):
-#     app.permissions.add(permission_manage_apps)
-#     settings.PLUGINS = ["saleor.plugins.webhook.plugin.WebhookPlugin"]
-#     settings.OBSERVABILITY_ACTIVE = True
-
-
-# @mock.patch("saleor.plugins.webhook.plugin.observability_buffer_put_event")
-# def test_observability_api_call(mocked_observability, setup_webhooks_plugin, rf):
-#     manager = get_plugins_manager()
-#     request = rf.post("/", data={"request": "data"})
-#     request.request_time = datetime(1914, 6, 28, 10, 50, tzinfo=timezone.utc)
-#     request.request_uuid = uuid4()
-#     response = JsonResponse(data={"response": "data"})
-#     expected_data = generate_truncated_api_call_payload(request, response)
-
-#     manager.observability_api_call(request, response)
-
-#     mocked_observability.assert_called_once_with(
-#         WebhookEventAsyncType.OBSERVABILITY_API_CALLS, expected_data
-#     )
-
-
-# @mock.patch("saleor.plugins.webhook.plugin.observability_buffer_put_event")
-# @mock.patch(
-#     "saleor.plugins.webhook.plugin.generate_truncated_api_call_payload",
-#     side_effect=ValueError,
-# )
-# def test_observability_api_call_when_payload_generate_fails(
-#     _, mocked_observability_buffer_put_event, setup_webhooks_plugin, rf
-# ):
-#     manager = get_plugins_manager()
-
-#     manager.observability_api_call(
-#         rf.post("/", data={"request": "data"}), JsonResponse(data={"response": "data"})
-#     )
-
-#     mocked_observability_buffer_put_event.assert_not_called()
-
-
-# @mock.patch(
-#     "saleor.plugins.webhook.plugin.observability_buffer_put_event",
-#     side_effect=Exception,
-# )
-# def test_observability_api_call_catch_all_exceptions(
-#     mocked_observability_buffer_put_event, setup_webhooks_plugin, rf
-# ):
-#     manager = get_plugins_manager()
-
-#     manager.observability_api_call(
-#         rf.post("/", data={"request": "data"}), JsonResponse(data={"response": "data"})
-#     )
-
-
-# @mock.patch("saleor.plugins.webhook.plugin.observability_buffer_put_event")
-# def test_observability_event_delivery_attempt(
-#     mocked_observability,
-#     setup_webhooks_plugin,
-#     event_attempt,
-# ):
-#     manager = get_plugins_manager()
-#     next_retry = timezone.now()
-#     expected_data = generate_truncated_event_delivery_attempt_payload(
-#         event_attempt, next_retry
-#     )
-
-#     manager.observability_event_delivery_attempt(event_attempt, next_retry)
-
-#     mocked_observability.assert_called_once_with(
-#         WebhookEventAsyncType.OBSERVABILITY_EVENT_DELIVERY_ATTEMPTS, expected_data
-#     )
-
-
-# @mock.patch("saleor.plugins.webhook.plugin.observability_buffer_put_event")
-# @mock.patch(
-#     "saleor.plugins.webhook.plugin.generate_truncated_event_delivery_attempt_payload",
-#     side_effect=ValueError,
-# )
-# def test_observability_event_delivery_attempt_when_payload_generate_fails(
-#     _,
-#     mocked_observability_buffer_put_event,
-#     setup_webhooks_plugin,
-#     event_attempt,
-# ):
-#     manager = get_plugins_manager()
-
-#     manager.observability_event_delivery_attempt(event_attempt, None)
-
-#     mocked_observability_buffer_put_event.assert_not_called()
-
-
-# @mock.patch(
-#     "saleor.plugins.webhook.plugin.observability_buffer_put_event",
-#     side_effect=Exception,
-# )
-# def test_observability_event_delivery_attempt_catch_all_exceptions(
-#     mocked_observability_buffer_put_event, setup_webhooks_plugin, event_attempt
-# ):
-#     manager = get_plugins_manager()
-
-#     manager.observability_event_delivery_attempt(event_attempt, None)
 
 
 @mock.patch("saleor.plugins.webhook.tasks.observability_event_delivery_attempt")

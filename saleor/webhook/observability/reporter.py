@@ -3,6 +3,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import Any, Callable, Dict, Generator, Optional, Tuple
 
+import opentracing
 from django.http import HttpRequest, HttpResponse
 from graphql import GraphQLDocument
 
@@ -17,8 +18,6 @@ _API_CALL_CONTEXT: ContextVar[Optional[ApiCallResponse]] = ContextVar(
 _GQL_OPERATION_CONTEXT: ContextVar[Optional[GQLOperationResult]] = ContextVar(
     "gql_operation_context", default=None
 )
-
-import opentracing
 
 
 @contextmanager

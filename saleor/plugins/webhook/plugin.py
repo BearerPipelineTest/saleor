@@ -2,8 +2,6 @@ import json
 import logging
 from typing import TYPE_CHECKING, Any, List, Optional, Union
 
-from django.conf import settings
-
 from ...app.models import App
 from ...core import EventDeliveryStatus
 from ...core.models import EventDelivery
@@ -11,8 +9,6 @@ from ...core.notify_events import NotifyEventType
 from ...core.utils.json_serializer import CustomJsonEncoder
 from ...payment import PaymentError, TransactionKind
 from ...webhook.event_types import WebhookEventAsyncType, WebhookEventSyncType
-from ...webhook.observability import ObservabilityError
-from ...webhook.observability.buffer import observability_buffer_put_event
 from ...webhook.payloads import (
     generate_checkout_payload,
     generate_collection_payload,
@@ -51,13 +47,9 @@ from .utils import (
 )
 
 if TYPE_CHECKING:
-    from datetime import datetime
-
-    from django.http import HttpRequest, JsonResponse
 
     from ...account.models import User
     from ...checkout.models import Checkout
-    from ...core.models import EventDeliveryAttempt
     from ...discount.models import Sale
     from ...graphql.discount.mutations import NodeCatalogueInfo
     from ...invoice.models import Invoice
