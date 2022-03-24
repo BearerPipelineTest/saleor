@@ -25,13 +25,13 @@ from ...settings import WEBHOOK_SYNC_TIMEOUT, WEBHOOK_TIMEOUT
 from ...site.models import Site
 from ...webhook.event_types import WebhookEventAsyncType, WebhookEventSyncType
 from ...webhook.models import Webhook
-from . import signature_for_payload
-from .observability import (
+from ...webhook.observability.buffer import (
     observability_buffer_get_events,
     observability_buffer_size_in_batches,
     observability_event_delivery_attempt,
-    task_next_retry_date,
 )
+from ...webhook.observability.utils import task_next_retry_date
+from . import signature_for_payload
 from .utils import (
     attempt_update,
     catch_duration_time,

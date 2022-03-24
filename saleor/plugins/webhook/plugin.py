@@ -11,6 +11,8 @@ from ...core.notify_events import NotifyEventType
 from ...core.utils.json_serializer import CustomJsonEncoder
 from ...payment import PaymentError, TransactionKind
 from ...webhook.event_types import WebhookEventAsyncType, WebhookEventSyncType
+from ...webhook.observability import ObservabilityError
+from ...webhook.observability.buffer import observability_buffer_put_event
 from ...webhook.payloads import (
     generate_checkout_payload,
     generate_collection_payload,
@@ -31,12 +33,9 @@ from ...webhook.payloads import (
     generate_requestor,
     generate_sale_payload,
     generate_translation_payload,
-    generate_truncated_api_call_payload,
-    generate_truncated_event_delivery_attempt_payload,
 )
 from ..base_plugin import BasePlugin, ExcludedShippingMethod
 from .const import CACHE_EXCLUDED_SHIPPING_KEY
-from .observability import ObservabilityError, observability_buffer_put_event
 from .shipping import get_excluded_shipping_data, parse_list_shipping_methods_response
 from .tasks import (
     _get_webhooks_for_event,
@@ -389,41 +388,6 @@ class WebhookPlugin(BasePlugin):
                 [stock], self.requestor
             )
             trigger_webhooks_async(product_variant_data, event_type, webhooks)
-
-    def observability_api_call(
-        self, request: "HttpRequest", response: "JsonResponse", previous_value: Any
-    ) -> Any:
-        if not self.active or not settings.OBSERVABILITY_ACTIVE:
-            return previous_value
-        event_type = WebhookEventAsyncType.OBSERVABILITY_API_CALLS
-        if _get_webhooks_for_event(event_type):
-            try:
-                event = generate_truncated_api_call_payload(request, response)
-                observability_buffer_put_event(event_type, event)
-            except (ValueError, ObservabilityError):
-                logger.info("Observability %s event skiped", event_type, exc_info=True)
-            except Exception:
-                logger.warn("Observability %s event skiped", event_type, exc_info=True)
-
-    def observability_event_delivery_attempt(
-        self,
-        attempt: "EventDeliveryAttempt",
-        next_retry: Optional["datetime"],
-        previous_value: Any,
-    ) -> Any:
-        if not self.active or not settings.OBSERVABILITY_ACTIVE:
-            return previous_value
-        event_type = WebhookEventAsyncType.OBSERVABILITY_EVENT_DELIVERY_ATTEMPTS
-        if _get_webhooks_for_event(event_type):
-            try:
-                event = generate_truncated_event_delivery_attempt_payload(
-                    attempt, next_retry
-                )
-                observability_buffer_put_event(event_type, event)
-            except (ValueError, ObservabilityError):
-                logger.info("Observability %s event skiped", event_type, exc_info=True)
-            except Exception:
-                logger.warn("Observability %s event skiped", event_type, exc_info=True)
 
     def checkout_created(self, checkout: "Checkout", previous_value: Any) -> Any:
         if not self.active:

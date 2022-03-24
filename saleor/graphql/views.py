@@ -6,7 +6,6 @@ import logging
 import traceback
 from inspect import isclass
 from typing import Any, Dict, List, Optional, Tuple, Union
-from uuid import uuid4
 
 import opentracing
 import opentracing.tags
@@ -26,6 +25,7 @@ from jwt.exceptions import PyJWTError
 from .. import __version__ as saleor_version
 from ..core.exceptions import PermissionDenied, ReadOnlyException
 from ..core.utils import is_valid_ipv4, is_valid_ipv6
+from ..webhook.observability import reporter
 from .api import API_PATH, schema
 from .context import get_context_value
 from .core.validators.query_cost import validate_query_cost
@@ -101,6 +101,7 @@ class GraphQLView(View):
                 "Cannot import '%s' graphene middleware!" % middleware_name
             )
 
+    @reporter.api_call_dispatch_wrapper
     def dispatch(self, request, *args, **kwargs):
         # Handle options method the GraphQlView restricts it.
         if request.method == "GET":
@@ -198,10 +199,10 @@ class GraphQLView(View):
             # we can calculate the RAW UTF-8 size using the length of
             # response.content of type 'bytes'
             span.set_tag("http.content_length", len(response.content))
-            observability_api_call(request, response)
 
             return response
 
+    @reporter.api_call_get_response_wrapper
     def get_response(
         self, request: HttpRequest, data: dict
     ) -> Tuple[Optional[Dict[str, List[Any]]], int]:
@@ -281,6 +282,9 @@ class GraphQLView(View):
             query_cost = 0
 
             document, error = self.parse_query(query)
+            reporter.set_gql_operation(
+                query=document, name=operation_name, variables=variables
+            )
             if error:
                 return error
 
@@ -484,10 +488,3 @@ def set_query_cost_on_result(execution_result: ExecutionResult, query_cost):
             }
         )
     return execution_result
-
-
-def observability_api_call(request, response: JsonResponse):
-    if settings.OBSERVABILITY_ACTIVE:
-        if settings.OBSERVABILITY_REPORT_ALL_API_CALLS or getattr(request, "app", None):
-            request.request_uuid = uuid4()
-            request.plugins.observability_api_call(request, response)

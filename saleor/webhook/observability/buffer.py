@@ -1,46 +1,42 @@
+import logging
 import math
 from contextlib import contextmanager
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import TYPE_CHECKING, Generator, List, Optional, cast
 
+import opentracing
 from django.conf import settings
 from django.core.cache import cache
-from django.utils import timezone
 from kombu import Connection, Exchange, Queue, pools
 from kombu.exceptions import ChannelError, KombuError
 from kombu.simple import SimpleQueue
 
-from ...plugins.manager import get_plugins_manager
 from ...webhook.event_types import WebhookEventAsyncType
+from . import (
+    ApiCallResponse,
+    FullObservabilityEventsBuffer,
+    ObservabilityConnectionError,
+    ObservabilityError,
+    ObservabilityKombuError,
+)
+from .payloads import (
+    generate_api_call_payload,
+    generate_truncated_event_delivery_attempt_payload,
+)
+from .utils import _get_webhooks_for_event
 
 if TYPE_CHECKING:
     from celery.exceptions import Retry
 
     from ...core.models import EventDeliveryAttempt
 
+logger = logging.getLogger(__name__)
+
 OBSERVABILITY_EXCHANGE_NAME = "observability_exchange"
 CACHE_KEY = "buffer_"
 EXCHANGE = Exchange(OBSERVABILITY_EXCHANGE_NAME, type="direct")
 CONNECT_TIMEOUT = 0.2
 DRAIN_EVENTS_TIMEOUT = 10.0
-
-
-class ObservabilityError(Exception):
-    """Common subclass for all Observability exceptions."""
-
-
-class ObservabilityKombuError(ObservabilityError):
-    """Observability Kombu error."""
-
-
-class ObservabilityConnectionError(ObservabilityError):
-    """Observability broker connection error."""
-
-
-class FullObservabilityEventsBuffer(ObservabilityError):
-    def __init__(self, event_type: str):
-        super().__init__(f"Observability buffer ({event_type}) is full.")
-        self.event_type = event_type
 
 
 class ObservabilityBuffer(SimpleQueue):
@@ -131,21 +127,64 @@ def observability_connection(
         connection.release()
 
 
-def task_next_retry_date(retry_error: "Retry") -> Optional[datetime]:
-    if isinstance(retry_error.when, (int, float)):
-        return timezone.now() + timedelta(seconds=retry_error.when)
-    elif isinstance(retry_error.when, datetime):
-        return retry_error.when
-    return None
-
-
 def observability_event_delivery_attempt(
     event_type: str,
     attempt: "EventDeliveryAttempt",
     next_retry: Optional[datetime] = None,
 ):
-    if event_type not in WebhookEventAsyncType.OBSERVABILITY_EVENTS:
-        get_plugins_manager().observability_event_delivery_attempt(attempt, next_retry)
+    with opentracing.global_tracer().start_active_span(
+        "observability_event_delivery_attempt"
+    ) as scope:
+        span = scope.span
+        span.set_tag(opentracing.tags.COMPONENT, "observability")
+        if event_type in WebhookEventAsyncType.OBSERVABILITY_EVENTS:
+            return
+        observability_event_type = (
+            WebhookEventAsyncType.OBSERVABILITY_EVENT_DELIVERY_ATTEMPTS
+        )
+        if _get_webhooks_for_event(observability_event_type).exists():
+            try:
+                event = generate_truncated_event_delivery_attempt_payload(
+                    attempt, next_retry
+                )
+                observability_buffer_put_event(event_type, event)
+            except (ValueError, ObservabilityError):
+                logger.info("Observability %s event skiped", event_type, exc_info=True)
+            except Exception:
+                logger.warn("Observability %s event skiped", event_type, exc_info=True)
+
+
+def observability_api_call(api_call: ApiCallResponse):
+    with opentracing.global_tracer().start_active_span(
+        "observability_api_call"
+    ) as scope:
+        span = scope.span
+        span.set_tag(opentracing.tags.COMPONENT, "observability")
+        if not settings.OBSERVABILITY_ACTIVE:
+            return
+        if api_call.request is None or api_call.response is None:
+            # TODO logging
+            return
+        if not settings.OBSERVABILITY_REPORT_ALL_API_CALLS and getattr(
+            api_call.request, "app", None
+        ):
+            return
+        event_type = WebhookEventAsyncType.OBSERVABILITY_API_CALLS
+        with opentracing.global_tracer().start_active_span("get_webhooks") as scope:
+            webhooks_exists = _get_webhooks_for_event(event_type).exists()
+        if webhooks_exists:
+            try:
+                event = generate_api_call_payload(
+                    api_call.request,
+                    api_call.response,
+                    api_call.queries,
+                    settings.OBSERVABILITY_MAX_PAYLOAD_SIZE,
+                )
+                observability_buffer_put_event(event_type, event)
+            except (ValueError, ObservabilityError):
+                logger.info("Observability %s event skiped", event_type, exc_info=True)
+            except Exception:
+                logger.warn("Observability %s event skiped", event_type, exc_info=True)
 
 
 @contextmanager
@@ -163,8 +202,13 @@ def _get_buffer(event_type: str) -> Generator[ObservabilityBuffer, None, None]:
 
 
 def observability_buffer_put_event(event_type: str, json_payload: str):
-    with _get_buffer(event_type) as buffer:
-        buffer.put_event(json_payload)
+    with opentracing.global_tracer().start_active_span(
+        "observability_buffer_put"
+    ) as scope:
+        span = scope.span
+        span.set_tag(opentracing.tags.COMPONENT, "observability")
+        with _get_buffer(event_type) as buffer:
+            buffer.put_event(json_payload)
 
 
 def observability_buffer_get_events(

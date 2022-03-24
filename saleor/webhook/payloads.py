@@ -5,7 +5,6 @@ from dataclasses import asdict
 from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Tuple
 
 import graphene
-from django.conf import settings
 from django.contrib.auth.models import AnonymousUser
 from django.db.models import F, QuerySet, Sum
 from django.utils import timezone
@@ -17,11 +16,8 @@ from ..checkout.models import Checkout
 from ..core.auth import DEFAULT_AUTH_HEADER, SALEOR_AUTH_HEADER
 from ..core.prices import quantize_price, quantize_price_fields
 from ..core.utils import build_absolute_uri
-from ..core.utils.anonymization import (
-    anonymize_checkout,
-    anonymize_order,
-    generate_fake_user,
-)
+from ..core.utils.anonymization import (anonymize_checkout, anonymize_order,
+                                        generate_fake_user)
 from ..core.utils.json_serializer import CustomJsonEncoder
 from ..core.utils.json_truncate import JsonTruncText
 from ..discount.utils import fetch_active_discounts
@@ -38,10 +34,8 @@ from ..warehouse.models import Stock, Warehouse
 from . import traced_payload_generator
 from .event_types import WebhookEventAsyncType
 from .payload_serializers import PayloadSerializer
-from .serializers import (
-    serialize_checkout_lines,
-    serialize_product_or_variant_attributes,
-)
+from .serializers import (serialize_checkout_lines,
+                          serialize_product_or_variant_attributes)
 
 if TYPE_CHECKING:
     # pylint: disable=unused-import
@@ -1056,135 +1050,3 @@ def generate_excluded_shipping_methods_for_checkout_payload(
         ],
     }
     return json.dumps(payload, cls=CustomJsonEncoder)
-
-
-SENSITIVE_ENV_KEYS = (SALEOR_AUTH_HEADER, DEFAULT_AUTH_HEADER)
-SENSITIVE_HEADERS = tuple(x[5:] for x in SENSITIVE_ENV_KEYS if x.startswith("HTTP_"))
-
-
-def hide_sensitive_headers(
-    headers: Dict[str, str], sensitive_headers: Tuple[str, ...] = SENSITIVE_HEADERS
-) -> Dict[str, str]:
-    return {
-        key: val if key.upper().replace("-", "_") not in sensitive_headers else "***"
-        for key, val in headers.items()
-    }
-
-
-TRUNC_PLACEHOLDER = JsonTruncText(truncated=False)
-
-
-def generate_truncated_api_call_payload(
-    request: "HttpRequest",
-    response: "JsonResponse",
-    bytes_limit: Optional[int] = None,
-) -> str:
-    if bytes_limit is None:
-        bytes_limit = int(settings.OBSERVABILITY_MAX_PAYLOAD_SIZE)
-    req_id = getattr(request, "request_uuid", uuid.uuid4())
-    req_time = getattr(request, "request_time", timezone.now())
-    req_data = {
-        "id": str(req_id),
-        "time": req_time.timestamp(),
-        "headers": hide_sensitive_headers(dict(request.headers)),
-        "contentLength": int(request.headers.get("Content-Length", 0)),
-        "body": TRUNC_PLACEHOLDER,
-    }
-    res_data = {
-        "headers": hide_sensitive_headers(dict(response.headers)),
-        "statusCode": response.status_code,
-        "reasonPhrase": response.reason_phrase,
-        "contentLength": len(response.content),
-        "body": TRUNC_PLACEHOLDER,
-    }
-    app_data = None
-    if app := getattr(request, "app", None):
-        app_data = {
-            "id": graphene.Node.to_global_id("App", app.id),
-            "name": app.name,
-        }
-    data = {"request": req_data, "response": res_data, "app": app_data}
-    base_dump = json.dumps(data, ensure_ascii=True, cls=CustomJsonEncoder)
-    remaining_bytes = bytes_limit - len(base_dump)
-    if remaining_bytes < 0:
-        raise ValueError(f"Payload too big. Can't truncate to {bytes_limit}")
-    try:
-        if request.POST:
-            body = request.POST.urlencode()
-        else:
-            body = request.body.decode("utf-8")
-        req_body = JsonTruncText.truncate(body, remaining_bytes // 2)
-    except ValueError:
-        req_body = JsonTruncText(truncated=True)
-    req_data["body"] = req_body
-    res_data["body"] = JsonTruncText.truncate(
-        response.content.decode(response.charset), remaining_bytes - req_body.byte_size
-    )
-    return json.dumps(data, ensure_ascii=True, cls=CustomJsonEncoder)
-
-
-def generate_truncated_event_delivery_attempt_payload(
-    attempt: "EventDeliveryAttempt",
-    next_retry: Optional["datetime"],
-    bytes_limit: Optional[int] = None,
-) -> str:
-    if bytes_limit is None:
-        bytes_limit = int(settings.OBSERVABILITY_MAX_PAYLOAD_SIZE)
-    delivery_data, webhook_data, app_data = {}, {}, {}
-    payload = None
-    if delivery := attempt.delivery:
-        if delivery.payload:
-            payload = delivery.payload.payload
-        delivery_data = {
-            "id": graphene.Node.to_global_id("EventDelivery", delivery.pk),
-            "status": delivery.status,
-            "type": delivery.event_type,
-            "payload": {
-                "contentLength": len(payload or ""),
-                "body": TRUNC_PLACEHOLDER,
-            },
-        }
-        if webhook := delivery.webhook:
-            app_data = {
-                "id": graphene.Node.to_global_id("App", webhook.app.pk),
-                "name": webhook.app.name,
-            }
-            webhook_data = {
-                "id": graphene.Node.to_global_id("Webhook", webhook.pk),
-                "name": webhook.name,
-                "targetUrl": webhook.target_url,
-            }
-    response_body = attempt.response or ""
-    request_headers = json.loads(attempt.request_headers or "{}")
-    response_headers = json.loads(attempt.response_headers or "{}")
-    data = {
-        "eventDeliveryAttempt": {
-            "id": graphene.Node.to_global_id("EventDeliveryAttempt", attempt.pk),
-            "time": attempt.created_at.timestamp(),
-            "duration": attempt.duration,
-            "status": attempt.status,
-            "nextRetry": next_retry.timestamp() if next_retry else None,
-        },
-        "request": {
-            "headers": request_headers,
-        },
-        "response": {
-            "headers": response_headers,
-            "contentLength": len(response_body.encode("utf-8")),
-            "body": TRUNC_PLACEHOLDER,
-        },
-        "eventDelivery": delivery_data,
-        "webhook": webhook_data,
-        "app": app_data,
-    }
-    initial_dump = json.dumps(data, ensure_ascii=True, cls=CustomJsonEncoder)
-    remaining_bytes = bytes_limit - len(initial_dump)
-    if remaining_bytes < 0:
-        raise ValueError(f"Payload too big. Can't truncate to {bytes_limit}")
-    response_body = JsonTruncText.truncate(response_body, remaining_bytes // 2)
-    data["response"]["body"] = response_body
-    if payload is not None:
-        delivery_data["payload"]["body"] = JsonTruncText.truncate(
-            payload, remaining_bytes - response_body.byte_size
-        )
-    return json.dumps(data, ensure_ascii=True, cls=CustomJsonEncoder)
